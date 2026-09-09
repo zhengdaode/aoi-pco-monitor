@@ -1,0 +1,13 @@
+{
+  "name": "aoi-pco-monitor",
+  "version": "0.1.0",
+  "description": "PCO（pokemoncenter-online.com）商品目录抓取与补货监控 — Aoi-system F9",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "grab": "node monitor/grab.js"
+  },
+  "dependencies": {
+    "playwright": "^1.47.0"
+  }
+}

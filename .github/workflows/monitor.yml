@@ -1,0 +1,35 @@
+name: monitor
+# 定时监控新着页（F9 M3 起 diff + 通知；M1 阶段仅抓取留证）
+# 注意：public 仓库 scheduled workflow 60 天无活动会被 GitHub 自动停用——本仓库自身每周 run 即为活动；停用时手动 re-enable。
+on:
+  schedule:
+    - cron: '23 * * * *' # 每小时 23 分（GitHub 实际执行有 ±延迟，粒度足够补货监控）
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install deps + Chromium
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Grab new arrivals
+        env:
+          URLS: 'https://www.pokemoncenter-online.com/search/?srule=top-new-product'
+        run: node monitor/grab.js
+      - name: Upload output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitor-output
+          path: out/
+          retention-days: 14
