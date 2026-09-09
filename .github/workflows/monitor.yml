@@ -1,10 +1,13 @@
 name: monitor
-# 定时监控新着页（F9 M3 起 diff + 通知；M1 阶段仅抓取留证）
-# 注意：public 仓库 scheduled workflow 60 天无活动会被 GitHub 自动停用——本仓库自身每周 run 即为活动；停用时手动 re-enable。
+# 定时监控新着页 —— ⚠️ M1 实测（2026-09-10）：PCO 风控对自动化浏览器一律
+# 「Restricted access」（Actions 数据中心 IP、本地家庭网络、headless 与有头
+# Chromium 均被拒，详见主仓库 docs/PLAN-F9-CATALOG-IMPORT.md §5）。
+# 在获得可行载体（如负责人工作机授权 + 真实浏览器方案）前暂停定时抓取，
+# 避免无意义高频撞墙；保留 workflow_dispatch 供复验。
 on:
-  schedule:
-    - cron: '23 * * * *' # 每小时 23 分（GitHub 实际执行有 ±延迟，粒度足够补货监控）
   workflow_dispatch:
+#  schedule:
+#    - cron: '23 * * * *'
 
 permissions:
   contents: read
