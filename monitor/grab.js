@@ -45,9 +45,24 @@ const EXTRACT_FN = () => {
   const targets = urls.length ? urls : DEFAULT_URLS;
   fs.mkdirSync(OUT, { recursive: true });
   const summary = [];
-  const browser = await chromium.launch({ headless: true });
+  // 去自动化特征（负责人 2026-09-10 明确批准放宽原「不做反检测」边界，见主仓库 PLAN §9）：
+  // 仅常规去自动化——抹除 navigator.webdriver、UA 去 Headless 标记、日语环境一致；
+  // 不做 CAPTCHA 破解、不用指纹伪装库、保持低频单会话、绝不自动下单。
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+  const browser = await chromium.launch({
+    headless: process.env.HEADED === '1' ? false : true,
+    channel: process.env.CHANNEL || undefined // 可选 'msedge' / 'chrome'：用系统安装的真实浏览器
+  });
   try {
-    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const context = await browser.newContext({
+      userAgent: UA,
+      locale: 'ja-JP',
+      timezoneId: 'Asia/Tokyo',
+      viewport: { width: 1280, height: 900 }
+    });
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    });
     for (let i = 0; i < targets.length; i++) {
       const url = targets[i];
       const slug = 'p' + (i + 1);
