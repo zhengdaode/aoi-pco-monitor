@@ -27,6 +27,7 @@ jobs:
       - name: Grab
         env:
           URLS: ${{ inputs.urls }}
+          CHANNEL: chrome
         run: node monitor/grab.js
       - name: Upload output
         if: always()

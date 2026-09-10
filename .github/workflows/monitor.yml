@@ -28,6 +28,7 @@ jobs:
       - name: Grab new arrivals
         env:
           URLS: 'https://www.pokemoncenter-online.com/search/?srule=top-new-product'
+          CHANNEL: chrome
         run: node monitor/grab.js
       - name: Upload output
         if: always()

@@ -15,10 +15,36 @@ const DEFAULT_URLS = [
 ];
 const OUT = path.join(__dirname, '..', 'out');
 
-// 与主仓库 js/catalog.js parseHtml 策略 A 同构的商品卡提取（DOM 内执行）
+// 与主仓库 js/catalog.js parseHtml 同构的商品卡提取（DOM 内执行）
+// A1：PCO 真实结构 li.product[data-pid]（链接 JAN.html、价格「385<small>円</small>」）；
+// A2：/products/ 链接兜底
 const EXTRACT_FN = () => {
   const out = [];
   const seen = {};
+  const push = (it) => {
+    if (!it || !it.jpName) return;
+    const key = it.url || it.jpName;
+    if (seen[key]) return;
+    seen[key] = 1;
+    out.push(it);
+  };
+  document.querySelectorAll('li[data-pid]').forEach((li) => {
+    const text = li.textContent || '';
+    const a = li.querySelector('a[href]');
+    const nameEl = li.querySelector('.txt a');
+    const img = li.querySelector('.pho img') || li.querySelector('img');
+    const priceEl = li.querySelector('.price');
+    const pm = (priceEl ? priceEl.textContent : text).match(/([\d,]{1,9})\s*円/);
+    const lm = text.match(/お一人様[^0-9]{0,6}(\d{1,2})\s*(?:個|点)/);
+    push({
+      pid: li.getAttribute('data-pid'),
+      jpName: ((nameEl && nameEl.textContent) || (img && img.getAttribute('alt')) || '').trim(),
+      priceJpy: pm ? parseInt(pm[1].replace(/,/g, ''), 10) : null,
+      limit: lm ? parseInt(lm[1], 10) : null,
+      image: (img && (img.currentSrc || img.getAttribute('src'))) || '',
+      url: (a && a.href) || ''
+    });
+  });
   document.querySelectorAll('a[href*="/products/"]').forEach((a) => {
     const card = a.closest('li') || a.closest('[class*="tile"]') || a.closest('[class*="product"]') || a.parentElement;
     const text = card ? card.textContent : (a.textContent || '');
@@ -26,10 +52,7 @@ const EXTRACT_FN = () => {
     const pm = text.match(/([\d,]{1,9})\s*円/);
     const lm = text.match(/お一人様[^0-9]{0,6}(\d{1,2})\s*(?:個|点)/);
     const name = ((img && img.getAttribute('alt')) || a.getAttribute('title') || (a.textContent || '')).trim();
-    const key = a.href || name;
-    if (!name || seen[key]) return;
-    seen[key] = 1;
-    out.push({
+    push({
       jpName: name,
       priceJpy: pm ? parseInt(pm[1].replace(/,/g, ''), 10) : null,
       limit: lm ? parseInt(lm[1], 10) : null,
@@ -71,22 +94,27 @@ const EXTRACT_FN = () => {
       const page = await context.newPage();
       const info = { url, finalUrl: '', title: '', items: 0, challenge: false, error: '' };
       try {
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-        // JS 质询会重定向到 wr.pokemoncenter-online.com 再跳回：等待并复查两次
-        for (let t = 0; t < 2; t++) {
-          await page.waitForTimeout(6000);
+        // 质询跳转链（wr. → www）上 domcontentloaded 会卡死（2026-09-10 实测）：
+        // 用 commit 起步 + 轮询「跳离 wr. 且商品网格出现」
+        await page.goto(url, { waitUntil: 'commit', timeout: parseInt(process.env.GOTO_TIMEOUT || '45000', 10) });
+        const pollN = Math.ceil(parseInt(process.env.GOTO_TIMEOUT || '45000', 10) / 3000);
+        for (let t = 0; t < pollN; t++) {
+          await page.waitForTimeout(3000);
           info.finalUrl = page.url();
-          if (!/wr\.pokemoncenter-online\.com/.test(info.finalUrl)) break;
+          if (/wr\.pokemoncenter-online\.com/.test(info.finalUrl)) { info.challenge = true; continue; }
+          info.challenge = false;
+          const grid = await page.evaluate(() => document.querySelectorAll('li[data-pid]').length).catch(() => 0);
+          if (grid > 0) break;
         }
         info.challenge = /wr\.pokemoncenter-online\.com/.test(page.url());
         info.title = await page.title();
+        info.finalUrl = page.url();
         if (!info.challenge) {
           await page.waitForTimeout(3000); // 等商品网格渲染
           const items = await page.evaluate(EXTRACT_FN);
           info.items = items.length;
           fs.writeFileSync(path.join(dir, 'products.json'), JSON.stringify(items, null, 2), 'utf8');
         }
-        info.finalUrl = page.url();
         fs.writeFileSync(path.join(dir, 'page.html'), await page.content(), 'utf8');
         await page.screenshot({ path: path.join(dir, 'screenshot.png'), fullPage: false });
       } catch (e) {
